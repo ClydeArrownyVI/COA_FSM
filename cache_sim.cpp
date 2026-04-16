@@ -97,6 +97,58 @@ public:
     uint32_t getTag() const    { return (currentReq.address >> 14) & 0x3FFFF; } 
 
     CacheBlock& getBlock(uint32_t index) { return cache[index]; }
+
+    // display cache state
+    void displayCache() const {
+        int dirtyCount  = 0;
+        int validCount  = 0;
+        int shownBlocks = 0;
+
+        cout << "\n==================================================" << endl;
+        cout << "   CACHE STATE SNAPSHOT  (" << NUM_BLOCKS << " blocks total)" << endl;
+        cout << "==================================================" << endl;
+        cout << left
+             << setw(8)  << "Index"
+             << setw(10) << "Valid"
+             << setw(10) << "Dirty"
+             << setw(12) << "Tag (hex)"
+             << setw(12) << "Word[0]"
+             << setw(12) << "Word[1]"
+             << setw(12) << "Word[2]"
+             << setw(12) << "Word[3]"
+             << endl;
+        cout << string(88, '-') << endl;
+
+        for (int i = 0; i < NUM_BLOCKS; i++) {
+            const CacheBlock& block = cache[i];
+            if (block.valid == 0) continue;  // skip empty blocks
+
+            cout << left
+                 << setw(8)  << dec << i
+                 << setw(10) << block.valid
+                 << setw(10) << block.dirty
+                 << "0x" << hex << uppercase << setw(10) << block.tag
+                 << setw(12) << dec << block.data[0]
+                 << setw(12) << block.data[1]
+                 << setw(12) << block.data[2]
+                 << setw(12) << block.data[3]
+                 << endl;
+
+            shownBlocks++;
+            if (block.dirty == 1) dirtyCount++;
+            validCount++;
+        }
+
+        if (shownBlocks == 0) {
+            cout << "  (cache is empty — no valid blocks installed yet)" << endl;
+        }
+
+        cout << string(88, '-') << endl;
+        cout << "Valid blocks: " << validCount
+             << "  |  Dirty blocks: " << dirtyCount
+             << "  |  Empty blocks: " << (NUM_BLOCKS - validCount) << endl;
+        cout << "==================================================" << endl;
+    }
 };
 
 // ==========================================
@@ -276,97 +328,105 @@ int main() {
     
     CacheController controller;
     int modeChoice;
-
-    cout << "=================================================\n";
-    cout << "   FSM Cache Controller Simulator (16 KiB)\n";
-    cout << "=================================================\n";
-    cout << "Select Operating Mode:\n";
-    cout << " [1] Run Automated Test Suite (All Scenarios)\n";
-    cout << " [2] Interactive CPU Mode\n";
-    cout << "Choice: ";
-    
-    if (!(cin >> modeChoice)) {
-        cin.clear();
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        modeChoice = 2; // Default to interactive on bad input
-    }
-
-    if (modeChoice == 1) {
-        cout << "\n=================================================";
-        cout << "\n   STARTING AUTOMATED SIMULATION";
-        cout << "\n=================================================\n";
-        
-        cout << "\n--> SCENARIO 1: Compulsory Miss (Clean Allocate)";
-        controller.process({"READ", 0x1000, 0});
-        
-        cout << "\n--> SCENARIO 2: Write Hit (Sets Dirty Bit)";
-        controller.process({"WRITE", 0x1000, 42});
-        
-        cout << "\n--> SCENARIO 3: Spatial Locality Hit (Different Word, Same Block)";
-        controller.process({"READ", 0x1004, 0});
-        
-        cout << "\n--> SCENARIO 4: Compulsory Miss #2";
-        controller.process({"READ", 0xA000, 0});
-        
-        cout << "\n--> SCENARIO 5: Conflict Miss (Evicts Clean Block 0xA000)";
-        controller.process({"READ", 0xE000, 0});
-        
-        cout << "\n--> SCENARIO 6: Conflict Miss (Evicts Dirty Block 0x1000 -> Triggers Write-Back)";
-        controller.process({"WRITE", 0x5000, 99});
-
-        cout << "\n=================================================";
-        cout << "\n   AUTOMATED SIMULATION COMPLETE";
-        cout << "\n=================================================\n";
-        return 0;
-    }
-
-    // Interactive Mode
-    string command;
-    uint32_t address;
-    uint32_t data;
-
-    cout << "\n=================================================\n";
-    cout << "Instructions:\n";
-    cout << " Act as the CPU by entering memory requests.\n";
-    cout << " \n";
-    cout << " Format for READ:  READ <hex_address>\n";
-    cout << " Format for WRITE: WRITE <hex_address> <integer_data>\n";
-    cout << " Type EXIT to quit.\n";
-    cout << "=================================================\n\n";
-
     while (true) {
-        cout << "\nCPU> ";
-        cin >> command;
-
-        for (auto &c : command) c = toupper(c);
-
-        if (command == "EXIT") {
-            cout << "Shutting down cache controller..." << endl;
-            break;
-        }
-
-        if (command == "READ") {
-            if (cin >> hex >> address) {
-                controller.process({"READ", address, 0});
-            } else {
-                cout << "[Error] Invalid address format." << endl;
-                cin.clear();
-                cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            }
-        } else if (command == "WRITE") {
-            if (cin >> hex >> address >> dec >> data) {
-                controller.process({"WRITE", address, data});
-            } else {
-                cout << "[Error] Invalid input format. Expected: WRITE <hex_addr> <dec_data>" << endl;
-                cin.clear();
-                cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            }
-        } else {
-            cout << "[Error] Unknown command. Please use READ, WRITE, or EXIT." << endl;
+        cout << "=================================================\n";
+        cout << "   FSM Cache Controller Simulator (16 KiB)\n";
+        cout << "=================================================\n";
+        cout << "Select Operating Mode:\n";
+        cout << " [1] Run Automated Test Suite (All Scenarios)\n";
+        cout << " [2] Interactive CPU Mode\n";
+        cout << " [3] View Current Cache State\n";
+        cout << " [input any other integer] Exit\n";
+        cout << "Choice: ";
+        
+        if (!(cin >> modeChoice)) {
             cin.clear();
             cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            modeChoice = 2; // Default to interactive on bad input
         }
+
+        if (modeChoice == 1) {
+            cout << "\n=================================================";
+            cout << "\n   STARTING AUTOMATED SIMULATION";
+            cout << "\n=================================================\n";
+            
+            cout << "\n--> SCENARIO 1: Compulsory Miss (Clean Allocate)";
+            controller.process({"READ", 0x1000, 0});
+            
+            cout << "\n--> SCENARIO 2: Write Hit (Sets Dirty Bit)";
+            controller.process({"WRITE", 0x1000, 42});
+            
+            cout << "\n--> SCENARIO 3: Spatial Locality Hit (Different Word, Same Block)";
+            controller.process({"READ", 0x1004, 0});
+            
+            cout << "\n--> SCENARIO 4: Compulsory Miss #2";
+            controller.process({"READ", 0xA000, 0});
+            
+            cout << "\n--> SCENARIO 5: Conflict Miss (Evicts Clean Block 0xA000)";
+            controller.process({"READ", 0xE000, 0});
+            
+            cout << "\n--> SCENARIO 6: Conflict Miss (Evicts Dirty Block 0x1000 -> Triggers Write-Back)";
+            controller.process({"WRITE", 0x5000, 99});
+
+            cout << "\n=================================================";
+            cout << "\n   AUTOMATED SIMULATION COMPLETE";
+            cout << "\n=================================================\n";
+        }
+        else if (modeChoice == 2) {
+            // Interactive Mode
+            string command;
+            uint32_t address;
+            uint32_t data;
+
+            cout << "\n=================================================\n";
+            cout << "Instructions:\n";
+            cout << " Act as the CPU by entering memory requests.\n";
+            cout << " \n";
+            cout << " Format for READ:  READ <hex_address>\n";
+            cout << " Format for WRITE: WRITE <hex_address> <integer_data>\n";
+            cout << " Type EXIT to quit.\n";
+            cout << "=================================================\n\n";
+
+            while (true) {
+                cout << "\nCPU> ";
+                cin >> command;
+
+                for (auto &c : command) c = toupper(c);
+
+                if (command == "EXIT") {
+                    cout << "Shutting down cache controller..." << endl;
+                    break;
+                }
+
+                if (command == "READ") {
+                    if (cin >> hex >> address) {
+                        controller.process({"READ", address, 0});
+                    } else {
+                        cout << "[Error] Invalid address format." << endl;
+                        cin.clear();
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                    }
+                } else if (command == "WRITE") {
+                    if (cin >> hex >> address >> dec >> data) {
+                        controller.process({"WRITE", address, data});
+                    } else {
+                        cout << "[Error] Invalid input format. Expected: WRITE <hex_addr> <dec_data>" << endl;
+                        cin.clear();
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                    }
+                } else {
+                    cout << "[Error] Unknown command. Please use READ, WRITE, or EXIT." << endl;
+                    cin.clear();
+                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                }
+            }
+        }
+        else if (modeChoice == 3) {
+            controller.displayCache();
+        }
+        else break;
     }
+    
 
     return 0;
 }
