@@ -15,7 +15,7 @@ const int CACHE_SIZE_KB = 16;
 const int BLOCK_SIZE_BYTES = 16; 
 const int NUM_BLOCKS = (CACHE_SIZE_KB * 1024) / BLOCK_SIZE_BYTES; 
 
-const int MEMORY_LATENCY = 100; 
+const int MEMORY_LATENCY = 100; // Fixed memory latency restored
 const int CACHE_LATENCY = 1;  
 
 // CPU Request Structure
@@ -273,14 +273,59 @@ int main() {
  \____|_| \_/ \___|       |_|\___/ \__,_|\___/ |  __/ 
                                                |_|    
     )" << '\n';
+    
     CacheController controller;
-    string command;
-    uint32_t address;
-    uint32_t data;
+    int modeChoice;
 
     cout << "=================================================\n";
     cout << "   FSM Cache Controller Simulator (16 KiB)\n";
     cout << "=================================================\n";
+    cout << "Select Operating Mode:\n";
+    cout << " [1] Run Automated Test Suite (All Scenarios)\n";
+    cout << " [2] Interactive CPU Mode\n";
+    cout << "Choice: ";
+    
+    if (!(cin >> modeChoice)) {
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        modeChoice = 2; // Default to interactive on bad input
+    }
+
+    if (modeChoice == 1) {
+        cout << "\n=================================================";
+        cout << "\n   STARTING AUTOMATED SIMULATION";
+        cout << "\n=================================================\n";
+        
+        cout << "\n--> SCENARIO 1: Compulsory Miss (Clean Allocate)";
+        controller.process({"READ", 0x1000, 0});
+        
+        cout << "\n--> SCENARIO 2: Write Hit (Sets Dirty Bit)";
+        controller.process({"WRITE", 0x1000, 42});
+        
+        cout << "\n--> SCENARIO 3: Spatial Locality Hit (Different Word, Same Block)";
+        controller.process({"READ", 0x1004, 0});
+        
+        cout << "\n--> SCENARIO 4: Compulsory Miss #2";
+        controller.process({"READ", 0xA000, 0});
+        
+        cout << "\n--> SCENARIO 5: Conflict Miss (Evicts Clean Block 0xA000)";
+        controller.process({"READ", 0xE000, 0});
+        
+        cout << "\n--> SCENARIO 6: Conflict Miss (Evicts Dirty Block 0x1000 -> Triggers Write-Back)";
+        controller.process({"WRITE", 0x5000, 99});
+
+        cout << "\n=================================================";
+        cout << "\n   AUTOMATED SIMULATION COMPLETE";
+        cout << "\n=================================================\n";
+        return 0;
+    }
+
+    // Interactive Mode
+    string command;
+    uint32_t address;
+    uint32_t data;
+
+    cout << "\n=================================================\n";
     cout << "Instructions:\n";
     cout << " Act as the CPU by entering memory requests.\n";
     cout << " \n";
